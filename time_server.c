@@ -9,20 +9,33 @@
 #include <sys/wait.h>
 #include <time.h>
 
-void signalHanlder(int signo) {
-    pid_t pid = wait(NULL);
-    printf("Child process terminated, pid = %d\n", pid);
+void signalHandler(int signo) {
+    pid_t pid;
+    while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) {
+        printf("Child process terminated, pid = %d\n", pid);
+    }
 }
 
-char* get_time(char* format) {
+char* getCurrentTime(char* format) {
     time_t rawtime;
     struct tm * timeinfo;
-    char * buffer = (char *)malloc(80*sizeof(char));
+    char *buffer = (char *)malloc(80 * sizeof(char));
 
-    time (&rawtime);
+    time(&rawtime);
     timeinfo = localtime(&rawtime);
 
-    strftime(buffer,80,format,timeinfo);
+    if (strcmp(format, "dd/mm/yyyy") == 0) {
+        strftime(buffer, 80, "%d/%m/%Y\n", timeinfo);
+    } else if (strcmp(format, "dd/mm/yy") == 0) {
+        strftime(buffer, 80, "%d/%m/%y\n", timeinfo);
+    } else if (strcmp(format, "mm/dd/yyyy") == 0) {
+        strftime(buffer, 80, "%m/%d/%Y\n", timeinfo);
+    } else if (strcmp(format, "mm/dd/yy") == 0) {
+        strftime(buffer, 80, "%m/%d/%y\n", timeinfo);
+    } else {
+        strcpy(buffer, "Invalid format\n");
+    }
+
     return buffer;
 }
 
@@ -52,7 +65,7 @@ int main() {
         return 1;
     }
 
-    signal(SIGCHLD, signalHanlder);
+    signal(SIGCHLD, signalHandler);
 
     while (1) {
         printf("Waiting for new client\n");
@@ -73,15 +86,21 @@ int main() {
                 buf[ret] = 0;
                 printf("Received: %s", buf);
 
-                if (strncmp(buf, "GET_TIME ", 9) == 0) {
-                    char* format = buf + 9;
-                    char* time_str = get_time(format);
-                    send(client, time_str, strlen(time_str), 0);
-                    free(time_str);
+                // Xử lý lệnh từ client
+                if (strncmp(buf, "GET_TIME", 8) == 0) {
+                    char *format = strtok(buf + 9, " \r\n");
+                    char *timeStr = getCurrentTime(format);
+                    send(client, timeStr, strlen(timeStr), 0);
+                    free(timeStr);
+                }
+                else {
+                    char* message = "Invalid command\n";
+                    send(client, message, strlen(message), 0);
                 }
             }
 
             // Ket thuc tien trinh con
+            close(client);
             exit(0);
         }
 
